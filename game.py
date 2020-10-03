@@ -1,7 +1,7 @@
 from ribs import *
 from dataclasses import dataclass
 
-from random import sample, random
+from random import sample, random, choice
 
 # Asset dictionary for holding all your assets.
 assets = {}
@@ -21,6 +21,20 @@ TILE_SIZE = 15
 MAZE_SIZE = 51 # Must be an odd number for reasons
 OFFSETS = [(-1, 0), (0, -1), (1, 0), (0, 1)]
 
+STAGE_LENGTH = 200
+
+WALL   = 0
+OPEN   = 1
+PORTAL = 2
+GOAL   = 3
+
+COLORS = [
+    pg.Color(0, 0, 0),
+    pg.Color(255, 255, 255),
+    pg.Color(64, 255, 64),
+    pg.Color(255, 0, 0),
+]
+
 def init():
     """ A function for loading all your assets.
         (Audio assets can at their earliest be loaded here.)
@@ -31,10 +45,12 @@ def init():
     # Load sounds here
     #assets["plong"] = pg.mixer.Sound("plong.wav")
 
+    set_frame_rate(30)
 
-def generate_maze(start):
 
-    maze = [[False] * MAZE_SIZE for _ in range(MAZE_SIZE)]
+def generate_maze(start=(1,1)):
+
+    maze = [[WALL] * MAZE_SIZE for _ in range(MAZE_SIZE)]
 
     inner_maze_size = MAZE_SIZE // 2 - 1
     half_ims = inner_maze_size // 2
@@ -47,7 +63,7 @@ def generate_maze(start):
         return sample(offsets[1:], 3) + [offsets[0]]
 
     sx, sy = start
-    maze[sy][sx] = True
+    maze[sy][sx] = OPEN
 
     to_visit = [(start, start, OFFSETS)]
     visited = set()
@@ -62,8 +78,8 @@ def generate_maze(start):
         visited.add((x1, y1))
         visited.add((x2, y2))
 
-        maze[y1][x1] = True
-        maze[y2][x2] = True
+        maze[y1][x1] = OPEN
+        maze[y2][x2] = OPEN
 
         for ox, oy in offsets:
             nx, ny = x2 + ox, y2 + oy
@@ -77,21 +93,96 @@ def generate_maze(start):
 
             to_visit.append(((nx, ny), (nx2, ny2), scramble_offsets(offsets)))
 
+    portal_candidates = []
+    for x in range(1, MAZE_SIZE-1):
+        for y in range(1, MAZE_SIZE-1):
+            if maze[y][x]:
+                portal_candidates.append((x, y))
+
+    px, py = choice(portal_candidates)
+    maze[py][px] = PORTAL
+
+    to_visit = [(px, py)]
+    new_to_visit = []
+    visited = set()
+    dist = 0
+
+    while to_visit:
+
+        if dist == STAGE_LENGTH:
+            gx, gy = choice(to_visit)
+            maze[gy][gx] = GOAL
+            break
+
+        for x, y in to_visit:
+            for ox, oy in offsets:
+                nx, ny = x + ox, y + oy
+                if (nx, ny) not in visited and maze[ny][nx] != WALL:
+                    visited.add((nx, ny))
+                    new_to_visit.append((nx, ny))
+
+        dist += 1
+        to_visit, new_to_visit = new_to_visit, to_visit
+        new_to_visit.clear()
+
+
     return maze
+
+
+def get_start_pos(maze):
+    for y, row in enumerate(maze):
+        for x, block in enumerate(row):
+            if block == PORTAL:
+                return x, y
+
+
+def path_to_goal(player, maze):
+    to_visit = [(px, py)]
+    new_to_visit = []
+    visited = set()
+    dist = 0
+
+    while to_visit:
+
+        if dist == STAGE_LENGTH:
+            gx, gy = choice(to_visit)
+            maze[gy][gx] = GOAL
+            break
+
+        for x, y in to_visit:
+            for ox, oy in offsets:
+                nx, ny = x + ox, y + oy
+                if (nx, ny) not in visited and maze[ny][nx] != WALL:
+                    visited.add((nx, ny))
+                    new_to_visit.append((nx, ny))
+
+        dist += 1
+        to_visit, new_to_visit = new_to_visit, to_visit
+        new_to_visit.clear()
+
 
 
 def update():
     """The program starts here"""
     global current_level
     # Initialization (only runs on start/restart)
-    player = Player()
-
-    mazes = [generate_maze((1, 1)) for _ in range(6)]
 
     pg.display.set_mode((TILE_SIZE * MAZE_SIZE, TILE_SIZE * MAZE_SIZE))
 
+    player = Player()
+
+    mazes = [generate_maze() for _ in range(6)]
+
+    player.x, player.y = get_start_pos(mazes[0])
+
+
     # Main update loop
     while not key_pressed("q"):
+
+        if mazes[0][player.y][player.x] == GOAL:
+            del mazes[0]
+            mazes.append(generate_maze())
+            player.x, player.y = get_start_pos(mazes[0])
 
         ox, oy = 0, 0
         if key_down(pg.K_LEFT):
@@ -123,8 +214,8 @@ def update():
                             offset + y * TILE_SIZE * scale,
                             TILE_SIZE * scale + (1 if scale != 1 else 0),
                             TILE_SIZE * scale + (1 if scale != 1 else 0))
-                    c = 255 if block else 0
-                    pg.draw.rect(window, pg.Color(c, c, c), r)
+
+                    pg.draw.rect(window, COLORS[block], r)
 
             maze_size = maze_size / 2 + 1
             offset = TILE_SIZE * (MAZE_SIZE / 2 - maze_size / 2)
