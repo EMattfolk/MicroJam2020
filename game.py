@@ -15,6 +15,8 @@ def clamp(val, low, high):
 class Player:
     x = 1
     y = 1
+    hax = False
+    ultra_hax = False
 
 
 TILE_SIZE = 15
@@ -137,26 +139,24 @@ def get_start_pos(maze):
 
 
 def path_to_goal(player, maze):
-    to_visit = [(px, py)]
+    to_visit = [(player.x, player.y)]
     new_to_visit = []
-    visited = set()
-    dist = 0
+    visited = {to_visit[0]: []}
 
     while to_visit:
 
-        if dist == STAGE_LENGTH:
-            gx, gy = choice(to_visit)
-            maze[gy][gx] = GOAL
-            break
-
         for x, y in to_visit:
-            for ox, oy in offsets:
-                nx, ny = x + ox, y + oy
-                if (nx, ny) not in visited and maze[ny][nx] != WALL:
-                    visited.add((nx, ny))
-                    new_to_visit.append((nx, ny))
 
-        dist += 1
+            if maze[y][x] == GOAL:
+                return visited[(x, y)]
+
+            for ox, oy in OFFSETS:
+                nx, ny = x + ox, y + oy
+                if (nx, ny) in visited or maze[ny][nx] == WALL:
+                    continue
+                visited[(nx, ny)] = visited[(x, y)] + [(nx, ny)]
+                new_to_visit.append((nx, ny))
+
         to_visit, new_to_visit = new_to_visit, to_visit
         new_to_visit.clear()
 
@@ -201,6 +201,12 @@ def update():
         if not mazes[0][player.y][player.x]:
             player.y -= oy
 
+        if key_pressed("h") or key_pressed("d"):
+            player.hax = not player.hax
+
+        if key_pressed("u") or key_pressed("g"):
+            player.ultra_hax = not player.ultra_hax
+
         maze_size = MAZE_SIZE
         offset = 0
 
@@ -226,6 +232,16 @@ def update():
                 TILE_SIZE,
                 TILE_SIZE)
         pg.draw.rect(window, pg.Color(196, 0, 196), player_rect)
+
+
+        if player.hax:
+            path = path_to_goal(player, mazes[0])
+            for px, py in path[:-1]:
+                r = pg.Rect(px * TILE_SIZE, py * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                pg.draw.rect(window, pg.Color(128, 128, 196), r)
+
+            if player.ultra_hax:
+                player.x, player.y = path[0]
 
         # Main loop ends here, put your code above this line
         yield
