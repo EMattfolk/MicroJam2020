@@ -19,7 +19,7 @@ class Player:
     ultra_hax = False
 
 
-TILE_SIZE = 15
+TILE_SIZE = 16
 MAZE_SIZE = 51 # Must be an odd number for reasons
 OFFSETS = [(-1, 0), (0, -1), (1, 0), (0, 1)]
 
@@ -173,16 +173,19 @@ def update():
 
     mazes = [generate_maze() for _ in range(6)]
 
-    player.x, player.y = get_start_pos(mazes[0])
+    current_maze = mazes[0]
+
+    player.x, player.y = get_start_pos(current_maze)
 
 
     # Main update loop
     while not key_pressed("q"):
 
-        if mazes[0][player.y][player.x] == GOAL:
+        if current_maze[player.y][player.x] == GOAL:
             del mazes[0]
             mazes.append(generate_maze())
-            player.x, player.y = get_start_pos(mazes[0])
+            current_maze = mazes[0]
+            player.x, player.y = get_start_pos(current_maze)
 
         ox, oy = 0, 0
         if key_down(pg.K_LEFT):
@@ -195,10 +198,10 @@ def update():
             ox, oy = ox + OFFSETS[3][0], oy + OFFSETS[3][1]
 
         player.x += ox
-        if not mazes[0][player.y][player.x]:
+        if not current_maze[player.y][player.x]:
             player.x -= ox
         player.y += oy
-        if not mazes[0][player.y][player.x]:
+        if not current_maze[player.y][player.x]:
             player.y -= oy
 
         if key_pressed("h") or key_pressed("d"):
@@ -218,12 +221,12 @@ def update():
                     r = pg.Rect(
                             offset + x * TILE_SIZE * scale,
                             offset + y * TILE_SIZE * scale,
-                            TILE_SIZE * scale + (1 if scale != 1 else 0),
-                            TILE_SIZE * scale + (1 if scale != 1 else 0))
+                            TILE_SIZE * scale,
+                            TILE_SIZE * scale)
 
                     pg.draw.rect(window, COLORS[block], r)
 
-            maze_size = maze_size / 2 + 1
+            maze_size = maze_size / 2
             offset = TILE_SIZE * (MAZE_SIZE / 2 - maze_size / 2)
 
         player_rect = pg.Rect(
@@ -235,7 +238,7 @@ def update():
 
 
         if player.hax:
-            path = path_to_goal(player, mazes[0])
+            path = path_to_goal(player, current_maze)
             for px, py in path[:-1]:
                 r = pg.Rect(px * TILE_SIZE, py * TILE_SIZE, TILE_SIZE, TILE_SIZE)
                 pg.draw.rect(window, pg.Color(128, 128, 196), r)
