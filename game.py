@@ -48,6 +48,7 @@ def init():
     #assets["plong"] = pg.mixer.Sound("plong.wav")
 
     set_frame_rate(30)
+    pg.display.set_caption("Maze blazer")
 
 
 def generate_maze(start=(1,1)):
