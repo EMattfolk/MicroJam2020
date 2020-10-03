@@ -1,6 +1,8 @@
 from ribs import *
 from dataclasses import dataclass
 
+from random import sample, random
+
 # Asset dictionary for holding all your assets.
 assets = {}
 
@@ -16,96 +18,10 @@ class Player:
     width = 40
     height = 40
 
-    velocity = (0, 0)
 
-    walk_acc = 1000.0
-    max_walk_speed = 100
-    slow_down = 0.01
-
-
-def update_player(player, delta):
-    if key_down("d") or key_down(pg.K_RIGHT):
-        player.velocity = (player.velocity[0] + player.walk_acc * delta,
-                           player.velocity[1])
-    elif key_down("a") or key_down(pg.K_LEFT):
-        player.velocity = (player.velocity[0] - player.walk_acc * delta,
-                           player.velocity[1])
-    else:
-        # Yes, this is supposed to be an exponent.
-        player.velocity = (player.velocity[0] * (player.slow_down ** delta),
-                           player.velocity[1])
-
-    # Gravity
-    player.velocity = (player.velocity[0], player.velocity[1] + 100 * delta)
-
-    max_speed = player.max_walk_speed
-    clamped_horizontal_speed = clamp(player.velocity[0], -max_speed, max_speed)
-    player.velocity = (clamped_horizontal_speed, player.velocity[1])
-
-    player.centerx += player.velocity[0] * delta
-    player.centery += player.velocity[1] * delta
-
-
-def draw_player(player):
-    window = pg.display.get_surface()
-    pg.draw.rect(window, pg.Color(100, 30, 30), (player.centerx - player.width / 2,
-                                                 player.centery - player.height / 2,
-                                                 player.width,
-                                                 player.height))
-
-levels = [
-"""
-##########
-#        #
-#        #
-#        #
-# S    E #
-##########
-""",
-"""
-##########
-#        #
-# S      #
-####     #
-####   E #
-##########
-""",
-"""
-##########
-#      S #
-####     #
-##       #
-##E      #
-##########
-""",
-]
-
-
-def parse_level(level_string):
-    GRID_SIZE = 40
-
-    walls = []
-    goals = []
-    start = None
-
-    level_lines = level_string.strip().split("\n")
-    for tile_y, line in enumerate(level_lines):
-        y = tile_y * GRID_SIZE
-        for tile_x, c in enumerate(line):
-            x = tile_x * GRID_SIZE
-            r = pg.Rect(x, y, GRID_SIZE, GRID_SIZE)
-            if c == "#":
-                # It's a wall
-                walls.append(r)
-            elif c == "E":
-                # It's a goal
-                goals.append(r)
-            elif c == "S":
-                # It's the start
-                start = (x, y)
-
-    return walls, goals, start
-
+TILE_SIZE = 15
+MAZE_SIZE = 51 # Must be an odd number for reasons
+OFFSETS = [(-1, 0), (0, -1), (1, 0), (0, 1)]
 
 def init():
     """ A function for loading all your assets.
@@ -118,43 +34,69 @@ def init():
     #assets["plong"] = pg.mixer.Sound("plong.wav")
 
 
-current_level = 0
+def generate_maze(start):
+
+    maze = [[False] * MAZE_SIZE for _ in range(MAZE_SIZE)]
+
+    def in_bounds(x, y):
+        return x >= 0 and x < MAZE_SIZE and y >= 0 and y < MAZE_SIZE
+
+    def scramble_offsets(offsets):
+        return sample(offsets[1:], 3) + [offsets[0]]
+
+    sx, sy = start
+    maze[sy][sx] = True
+
+    to_visit = [(start, start, OFFSETS)]
+    visited = set()
+
+    while to_visit:
+
+        (x1, y1), (x2, y2), offsets = to_visit.pop()
+
+        if (x1, y1) in visited or (x2, y2) in visited:
+            continue
+
+        visited.add((x1, y1))
+        visited.add((x2, y2))
+
+        maze[y1][x1] = True
+        maze[y2][x2] = True
+
+        for ox, oy in offsets:
+            nx, ny = x2 + ox, y2 + oy
+            nx2, ny2 = x2 + 2*ox, y2 + 2*oy
+
+            if not in_bounds(nx, ny) or \
+               not in_bounds(nx2, ny2) or \
+               (nx, ny) in visited or \
+               (nx2, ny2) in visited:
+                continue
+
+            to_visit.append(((nx, ny), (nx2, ny2), scramble_offsets(offsets)))
+
+    return maze
+
+
 def update():
     """The program starts here"""
     global current_level
     # Initialization (only runs on start/restart)
     player = Player()
 
-    walls, goals, start = parse_level(levels[current_level])
-    player.centerx = start[0]
-    player.centery = start[1]
+    maze = generate_maze((1, 1))
+
+    pg.display.set_mode((TILE_SIZE * MAZE_SIZE, TILE_SIZE * MAZE_SIZE))
 
     # Main update loop
     while True:
-        update_player(player, delta())
-        draw_player(player)
 
-        for wall in walls:
-            window = pg.display.get_surface()
-            pg.draw.rect(window, pg.Color(100, 100, 100), wall)
-
-            player_vel, wall_vel, overlap = solve_rect_overlap(player,
-                                                               wall,
-                                                               player.velocity,
-                                                               mass_b=0,
-                                                               bounce=0.1)
-            player.velocity = player_vel
-
-        for goal in goals:
-            window = pg.display.get_surface()
-            pg.draw.rect(window, pg.Color(20, 100, 20), goal)
-
-            normal, depth = overlap_data(player, goal)
-            if depth > 0:
-                current_level = (current_level + 1) % len(levels)
-                restart()
-
-        draw_text(f"Level: {current_level + 1}", (0, 0))
+        window = pg.display.get_surface()
+        for y, row in enumerate(maze):
+            for x, block in enumerate(row):
+                r = pg.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                c = 255 if block else 0
+                pg.draw.rect(window, pg.Color(c, c, c), r)
 
         # Main loop ends here, put your code above this line
         yield
